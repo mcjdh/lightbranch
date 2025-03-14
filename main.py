@@ -90,12 +90,11 @@ while running:
         # Process movement with dt (60 is the target FPS for normalization)
         adjusted_dt = FPS * dt  # Normalize to target FPS
         
-        # Combine key checks for more efficient processing
+        # Combine key checks for more efficient processing - updated controls
         move_keys = (keys[pygame.K_UP] or keys[pygame.K_w], 
                     keys[pygame.K_DOWN] or keys[pygame.K_s])
-        rotation_keys = (keys[pygame.K_LEFT] or keys[pygame.K_a], 
-                        keys[pygame.K_RIGHT] or keys[pygame.K_d])
-        strafe_keys = (keys[pygame.K_q], keys[pygame.K_e])
+        rotation_keys = (keys[pygame.K_LEFT], keys[pygame.K_RIGHT])  # Only arrow keys for rotation
+        strafe_keys = (keys[pygame.K_a], keys[pygame.K_d])  # A and D for strafing
         
         # Handle movement in groups
         if move_keys[0]:
