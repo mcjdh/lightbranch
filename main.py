@@ -1,3 +1,5 @@
+# Import section - add config
+from core.config import *
 import pygame
 import sys
 from core.player import Player
@@ -7,18 +9,19 @@ from core.raycast import raycast
 from core.entity import Entity, render_entity, generate_entity, is_player_looking_at_entity
 from core.interaction import show_interaction_prompt, process_interaction_choice
 from modules.level_loader import load_level, get_level_names, transition_to_new_level
+from core.utils import draw_text, draw_fade_overlay
 
 # Initialize Pygame
 pygame.init()
 
 # Set up display
-WIDTH, HEIGHT = 800, 600
+WIDTH, HEIGHT = SCREEN_WIDTH, SCREEN_HEIGHT
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Pygame Setup")
 
 # Set up clock for controlling frame rate
 clock = pygame.time.Clock()
-FPS = 60
+FPS = DEFAULT_FPS
 
 # Set initial game map and create game instance
 current_level = "level1"
@@ -48,7 +51,7 @@ while running:
     # Calculate delta time for frame-independent movement
     dt = clock.tick(FPS) / 1000.0  # Convert milliseconds to seconds
     
-    # Handle events
+    # Extract the event handling to a separate function or reduce repetition
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -63,8 +66,9 @@ while running:
                 pygame.display.toggle_fullscreen()
             # Handle interaction key press (E)
             elif event.key == pygame.K_e and not interaction_mode:
-                # Perform raycasting to check if player is looking at entity
-                wall_data = raycast(player, game_map, WIDTH, HEIGHT)
+                # Optimization: Only perform raycasting if not already done
+                if 'wall_data' not in locals():
+                    wall_data = raycast(player, game_map, WIDTH, HEIGHT)
                 if is_player_looking_at_entity(player, entity, wall_data, WIDTH, HEIGHT):
                     interaction_mode = True
             # Process Y/N choices during interaction
@@ -82,40 +86,34 @@ while running:
     if not interaction_mode and not fading_out and not fading_in:
         # Handle player movement with frame rate independence
         keys = pygame.key.get_pressed()
-        move_speed_adjusted = player.move_speed * 60 * dt  # Adjust for framerate
-        rot_speed_adjusted = player.rot_speed * 60 * dt
         
-        # Temporarily store original speeds
-        orig_move_speed = player.move_speed
-        orig_rot_speed = player.rot_speed
+        # Process movement with dt (60 is the target FPS for normalization)
+        adjusted_dt = FPS * dt  # Normalize to target FPS
         
-        # Update speeds for this frame
-        player.move_speed = move_speed_adjusted
-        player.rot_speed = rot_speed_adjusted
+        # Combine key checks for more efficient processing
+        move_keys = (keys[pygame.K_UP] or keys[pygame.K_w], 
+                    keys[pygame.K_DOWN] or keys[pygame.K_s])
+        rotation_keys = (keys[pygame.K_LEFT] or keys[pygame.K_a], 
+                        keys[pygame.K_RIGHT] or keys[pygame.K_d])
+        strafe_keys = (keys[pygame.K_q], keys[pygame.K_e])
         
-        # Handle forward/backward movement
-        if keys[pygame.K_UP] or keys[pygame.K_w]:
-            player.move(True, game_map)
-        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-            player.move(False, game_map)
-        
-        # Handle rotation - FIXED: swapped rotation directions
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            player.rotate(-player.rot_speed)  # Changed from positive to negative
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            player.rotate(player.rot_speed)   # Changed from negative to positive
-        
-        # Handle strafing (added feature)
-        if keys[pygame.K_q]:
-            player.strafe(False, game_map)
-        if keys[pygame.K_e]:
-            player.strafe(True, game_map)
-        
-        # Reset to original speeds
-        player.move_speed = orig_move_speed
-        player.rot_speed = orig_rot_speed
+        # Handle movement in groups
+        if move_keys[0]:
+            player.move_frame_independent(True, game_map, adjusted_dt)
+        if move_keys[1]:
+            player.move_frame_independent(False, game_map, adjusted_dt)
+            
+        if rotation_keys[0]:
+            player.rotate_frame_independent(-player.rot_speed, adjusted_dt)
+        if rotation_keys[1]:
+            player.rotate_frame_independent(player.rot_speed, adjusted_dt)
+            
+        if strafe_keys[0]:
+            player.strafe_frame_independent(False, game_map, adjusted_dt)
+        if strafe_keys[1]:
+            player.strafe_frame_independent(True, game_map, adjusted_dt)
     
-    # Perform raycasting to get wall data
+    # Perform raycasting once per frame
     wall_data = raycast(player, game_map, WIDTH, HEIGHT)
     
     # Fill the screen with a color
@@ -139,21 +137,23 @@ while running:
     
     # Show interaction gaze indicator when looking at entity but not in interaction mode
     if entity.is_looked_at and not interaction_mode:
-        # Draw a small indicator dot or text at the center of the screen
+        # Draw a small indicator dot at the center of the screen
         pygame.draw.circle(screen, (255, 255, 255), (WIDTH // 2, HEIGHT // 2), 5)
         # Show interaction hint
-        font = pygame.font.SysFont(None, 24)
-        hint_text = font.render("Press 'E' to interact", True, (255, 255, 255))
-        screen.blit(hint_text, (WIDTH // 2 - hint_text.get_width() // 2, HEIGHT // 2 + 20))
+        draw_text(screen, "Press 'E' to interact", (WIDTH // 2, HEIGHT // 2 + 20), 
+                 centered=True)
     
     # Handle interaction mode
     if interaction_mode:
         show_interaction_prompt(screen, "Enter portal?", ["Y - Yes", "N - No"], WIDTH, HEIGHT)
     
     # Handle level transition with fade effect
-    if fading_out:
-        fade_alpha += 5
-        if fade_alpha >= 255:
+    if fading_out or fading_in:
+        # Update fade alpha
+        fade_alpha += FADE_SPEED if fading_out else -FADE_SPEED
+        
+        # Check for fade completion
+        if fading_out and fade_alpha >= 255:
             fade_alpha = 255
             fading_out = False
             
@@ -161,8 +161,6 @@ while running:
                 # Transition to new level
                 print(f"Transitioning from {current_level} to next level...")
                 game_map, current_level, player, entity = transition_to_new_level(current_level)
-                print(f"Loaded level: {current_level}")
-                print(f"Entity position: ({entity.x}, {entity.y})")
                 
                 # Update references
                 player.current_map = game_map
@@ -170,37 +168,24 @@ while running:
                 game.map = game_map
                 game.current_level = current_level
                 
-                # Give the entity a bright color to make it more visible for debugging
-                if not entity.color[0] > 180:  # Only if not already bright
-                    entity.color = (255, 200, 100)  # Bright orange-yellow
+                # Ensure entity is visible
+                if not entity.color[0] > 180:
+                    entity.color = (255, 200, 100)
                 
-                # Check if entity is reachable from player position
+                # Check path to entity
                 from modules.level_loader import is_path_between
-                if is_path_between(game_map, player.pos_x, player.pos_y, entity.x, entity.y):
-                    print("Entity is reachable from player position - path confirmed!")
-                else:
-                    print("WARNING: Entity might not be reachable!")
+                path_exists = is_path_between(game_map, player.pos_x, player.pos_y, entity.x, entity.y)
+                print(f"Entity is {'reachable' if path_exists else 'NOT reachable'} from player position")
                 
                 transition_requested = False
                 fading_in = True
         
-        # Draw fade overlay
-        fade_surface = pygame.Surface((WIDTH, HEIGHT))
-        fade_surface.fill((0, 0, 0))
-        fade_surface.set_alpha(fade_alpha)
-        screen.blit(fade_surface, (0, 0))
-    
-    if fading_in:
-        fade_alpha -= 5
-        if fade_alpha <= 0:
+        elif fading_in and fade_alpha <= 0:
             fade_alpha = 0
             fading_in = False
         
         # Draw fade overlay
-        fade_surface = pygame.Surface((WIDTH, HEIGHT))
-        fade_surface.fill((0, 0, 0))
-        fade_surface.set_alpha(fade_alpha)
-        screen.blit(fade_surface, (0, 0))
+        draw_fade_overlay(screen, fade_alpha)
     
     # Update the display
     pygame.display.flip()

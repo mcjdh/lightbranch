@@ -158,67 +158,104 @@ def is_path_between(game_map, start_x, start_y, end_x, end_y):
     # If we've searched everywhere and didn't find a path
     return False
 
-def generate_entity_for_level_transition(game_map, player):
+def find_valid_positions(game_map, min_dist_from_walls=0, min_dist_from_player=0, max_dist_from_player=None, player=None):
     """
-    Generate an entity in a valid position that's reachable from the player.
+    Find valid positions on the map based on various criteria.
     
     Args:
         game_map: 2D list representing the game map
-        player: Player object for reference positioning
+        min_dist_from_walls: Minimum tiles away from walls
+        min_dist_from_player: Minimum distance from player
+        max_dist_from_player: Maximum distance from player
+        player: Player object (required if min/max_dist_from_player > 0)
         
     Returns:
-        Entity: A newly generated entity object in a good position
+        list: List of (x, y) valid positions
     """
-    # Collect valid and reachable positions
     valid_positions = []
     
-    # Search the map for empty positions
-    for y in range(1, len(game_map) - 1):
-        for x in range(1, len(game_map[y]) - 1):
-            if game_map[y][x] == 0:
-                # Calculate distance to player
-                pos_x = x + 0.5
-                pos_y = y + 0.5
+    for y in range(min_dist_from_walls, len(game_map) - min_dist_from_walls):
+        for x in range(min_dist_from_walls, len(game_map[y]) - min_dist_from_walls):
+            if game_map[y][x] != 0:  # Skip wall tiles
+                continue
+                
+            # Check surrounding cells if needed
+            if min_dist_from_walls > 0:
+                too_close_to_wall = False
+                
+                for ny in range(y-min_dist_from_walls, y+min_dist_from_walls+1):
+                    for nx in range(x-min_dist_from_walls, x+min_dist_from_walls+1):
+                        if (ny < 0 or ny >= len(game_map) or nx < 0 or nx >= len(game_map[0]) or 
+                            game_map[ny][nx] != 0):
+                            too_close_to_wall = True
+                            break
+                    if too_close_to_wall:
+                        break
+                
+                if too_close_to_wall:
+                    continue
+            
+            # Calculate position with offset to avoid grid alignment
+            pos_x = x + 0.5  # Center of tile
+            pos_y = y + 0.5
+            
+            # Check distance from player if specified
+            if player and (min_dist_from_player > 0 or max_dist_from_player):
                 dx = pos_x - player.pos_x
                 dy = pos_y - player.pos_y
-                distance = (dx**2 + dy**2)**0.5
+                dist = (dx**2 + dy**2)**0.5
                 
-                # Check if position is in good range (not too close, not too far)
-                if 2.0 < distance < 7.0:
-                    # Check if there's a path from player to this position
-                    if is_path_between(game_map, player.pos_x, player.pos_y, pos_x, pos_y):
-                        # Prefer positions in front of the player
-                        dot_product = dx * player.dir_x + dy * player.dir_y
-                        weight = 2.0 if dot_product > 0 else 1.0  # Positions in front have higher weight
-                        
-                        # Add position with its weight
-                        valid_positions.append((pos_x, pos_y, weight))
+                if (min_dist_from_player > 0 and dist < min_dist_from_player) or \
+                   (max_dist_from_player and dist > max_dist_from_player):
+                    continue
+                    
+                # Check path to player if needed
+                if min_dist_from_player > 0 and not is_path_between(game_map, player.pos_x, player.pos_y, pos_x, pos_y):
+                    continue
+            
+            valid_positions.append((pos_x, pos_y))
     
-    # If we found valid positions, choose one with weighted probability
+    return valid_positions
+
+def place_player_in_valid_position(player, game_map):
+    """Place the player in a valid position in the new level."""
+    valid_positions = find_valid_positions(game_map, min_dist_from_walls=1)
+    
     if valid_positions:
-        # Sort positions by preference (higher weight = more preferred)
-        weighted_positions = []
-        total_weight = 0
-        
-        for pos_x, pos_y, weight in valid_positions:
-            total_weight += weight
-            weighted_positions.append((pos_x, pos_y, total_weight))
-        
-        # Choose a position with weighted random selection
-        rand_val = random.uniform(0, total_weight)
-        for pos_x, pos_y, cutoff in weighted_positions:
-            if rand_val <= cutoff:
-                # Generate a bright color for better visibility
-                random_color = (
-                    random.randint(180, 255),  # R (brighter)
-                    random.randint(150, 255),  # G
-                    random.randint(100, 255)   # B
-                )
-                
-                print(f"Entity spawned at ({pos_x:.2f}, {pos_y:.2f})")
-                return Entity(pos_x, pos_y, random_color, current_map=game_map)
+        player.pos_x, player.pos_y = random.choice(valid_positions)
+        print(f"Player positioned at ({player.pos_x}, {player.pos_y})")
+    else:
+        # Fallback to any empty cell
+        for y in range(len(game_map)):
+            for x in range(len(game_map[y])):
+                if game_map[y][x] == 0:
+                    player.pos_x = x + 0.5
+                    player.pos_y = y + 0.5
+                    return
+
+def generate_entity_for_level_transition(game_map, player):
+    """Generate an entity in a valid position that's reachable from the player."""
+    # Find positions good for entities (not too close, not too far from player)
+    valid_positions = find_valid_positions(game_map, min_dist_from_walls=0, 
+                                          min_dist_from_player=2.0, 
+                                          max_dist_from_player=7.0, 
+                                          player=player)
     
-    # If no good position with path is found, fall back to manual placement
+    if valid_positions:
+        # Choose a position
+        pos_x, pos_y = random.choice(valid_positions)
+        
+        # Generate a bright color for better visibility
+        random_color = (
+            random.randint(180, 255),  # R (brighter)
+            random.randint(150, 255),  # G
+            random.randint(100, 255)   # B
+        )
+        
+        print(f"Entity spawned at ({pos_x:.2f}, {pos_y:.2f})")
+        return Entity(pos_x, pos_y, random_color, current_map=game_map)
+    
+    # If no good position found, fall back to manual placement
     print("No ideal entity position found. Using fallback position...")
     return place_entity_at_fallback_position(game_map, player)
 
@@ -277,48 +314,3 @@ def place_entity_at_fallback_position(game_map, player):
     # Absolute last resort - a fixed position
     print("WARNING: Using fixed position for entity!")
     return Entity(1.5, 1.5, (255, 0, 0), current_map=game_map)
-
-def place_player_in_valid_position(player, game_map):
-    """
-    Place the player in a valid position in the new level.
-    
-    Args:
-        player: Player object to position
-        game_map: 2D list representing the game map
-    """
-    # Find valid starting positions (away from walls)
-    valid_positions = []
-    for y in range(1, len(game_map) - 1):
-        for x in range(1, len(game_map[y]) - 1):
-            if game_map[y][x] == 0:
-                # Check surrounding cells to make sure we're not too close to walls
-                is_valid = True
-                for ny in range(y-1, y+2):
-                    for nx in range(x-1, x+2):
-                        if ny < 0 or ny >= len(game_map) or nx < 0 or nx >= len(game_map[0]):
-                            is_valid = False
-                            break
-                        if game_map[ny][nx] != 0 and (ny != y or nx != x):
-                            is_valid = False
-                            break
-                
-                if is_valid:
-                    # Add some variation to avoid grid alignment
-                    pos_x = x + random.uniform(0.3, 0.7)
-                    pos_y = y + random.uniform(0.3, 0.7)
-                    valid_positions.append((pos_x, pos_y))
-    
-    if valid_positions:
-        # Choose a random valid position for the player
-        player.pos_x, player.pos_y = random.choice(valid_positions)
-        print(f"Player positioned at ({player.pos_x}, {player.pos_y})")
-    else:
-        # Fallback if no good positions found
-        print("Warning: No ideal player positions found")
-        # Find any empty cell
-        for y in range(len(game_map)):
-            for x in range(len(game_map[y])):
-                if game_map[y][x] == 0:
-                    player.pos_x = x + 0.5
-                    player.pos_y = y + 0.5
-                    return

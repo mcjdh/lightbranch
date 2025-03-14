@@ -1,70 +1,38 @@
 def raycast(player, game_map, width, height):
-    """
-    Perform raycasting for the entire screen width.
-    
-    Args:
-        player: Player object containing position and direction
-        game_map: 2D list representing the game map
-        width: Screen width
-        height: Screen height
-    
-    Returns:
-        list: A list of dictionaries containing wall rendering data for each column
-    """
+    """Optimized raycasting function with better performance."""
     wall_data = []
+    map_width, map_height = len(game_map[0]), len(game_map)
     
-    # Loop through each screen column
+    # Precalculate constants outside the loop
+    height_half = height // 2
+    
     for x in range(width):
         # Calculate ray position and direction
-        # x-coordinate in camera space (from -1 to 1)
         camera_x = 2 * x / width - 1
         ray_dir_x = player.dir_x + player.plane_x * camera_x
         ray_dir_y = player.dir_y + player.plane_y * camera_x
         
-        # Which map cell the player is currently in
-        map_x = int(player.pos_x)
-        map_y = int(player.pos_y)
+        # Starting map position
+        map_x, map_y = int(player.pos_x), int(player.pos_y)
         
-        # Length of ray from current position to next x or y-side
-        side_dist_x = 0
-        side_dist_y = 0
+        # Calculate delta distances - optimized to handle zero cases
+        delta_dist_x = 1e30 if ray_dir_x == 0 else abs(1 / ray_dir_x)
+        delta_dist_y = 1e30 if ray_dir_y == 0 else abs(1 / ray_dir_y)
         
-        # Length of ray from one x or y-side to next x or y-side
-        try:
-            delta_dist_x = abs(1 / ray_dir_x)
-        except ZeroDivisionError:
-            delta_dist_x = 1e30  # Very large number
-        
-        try:
-            delta_dist_y = abs(1 / ray_dir_y)
-        except ZeroDivisionError:
-            delta_dist_y = 1e30  # Very large number
-        
-        # Direction to step in x or y direction (either +1 or -1)
+        # Calculate step and initial side_dist in a more compact way
         step_x = 1 if ray_dir_x >= 0 else -1
         step_y = 1 if ray_dir_y >= 0 else -1
         
-        # Calculate step and initial side_dist
-        if ray_dir_x < 0:
-            step_x = -1
-            side_dist_x = (player.pos_x - map_x) * delta_dist_x
-        else:
-            step_x = 1
-            side_dist_x = (map_x + 1.0 - player.pos_x) * delta_dist_x
-            
-        if ray_dir_y < 0:
-            step_y = -1
-            side_dist_y = (player.pos_y - map_y) * delta_dist_y
-        else:
-            step_y = 1
-            side_dist_y = (map_y + 1.0 - player.pos_y) * delta_dist_y
-            
-        # Perform DDA (Digital Differential Analysis)
-        hit = 0  # Was there a wall hit?
-        side = 0  # Was a NS or a EW wall hit?
+        # Calculate initial side distances more concisely
+        side_dist_x = (step_x * (map_x + step_x * 0.5 + 0.5 - player.pos_x)) * delta_dist_x if ray_dir_x != 0 else 1e30
+        side_dist_y = (step_y * (map_y + step_y * 0.5 + 0.5 - player.pos_y)) * delta_dist_y if ray_dir_y != 0 else 1e30
+        if ray_dir_x < 0: side_dist_x = (player.pos_x - map_x) * delta_dist_x
+        if ray_dir_y < 0: side_dist_y = (player.pos_y - map_y) * delta_dist_y
         
-        while hit == 0:
-            # Jump to next map square, either in x-direction, or in y-direction
+        # Perform DDA with early exit when hitting map boundaries
+        wall_type, side = 0, 0
+        while True:
+            # Jump to next map square
             if side_dist_x < side_dist_y:
                 side_dist_x += delta_dist_x
                 map_x += step_x
@@ -73,39 +41,33 @@ def raycast(player, game_map, width, height):
                 side_dist_y += delta_dist_y
                 map_y += step_y
                 side = 1
+            
+            # Exit loop if out of bounds
+            if map_x < 0 or map_x >= map_width or map_y < 0 or map_y >= map_height:
+                wall_type = 1  # Default wall type for boundaries
+                break
                 
-            # Check if ray has hit a wall
-            if map_x < 0 or map_x >= len(game_map[0]) or map_y < 0 or map_y >= len(game_map):
-                hit = 1  # Hit map boundary
-            elif game_map[map_y][map_x] > 0:
-                hit = 1  # Hit a wall
-                wall_type = game_map[map_y][map_x]  # Store the wall type
+            # Exit loop if hit wall
+            if game_map[map_y][map_x] > 0:
+                wall_type = game_map[map_y][map_x]
+                break
         
-        # Calculate distance projected on camera direction
-        if side == 0:
-            perp_wall_dist = (map_x - player.pos_x + (1 - step_x) / 2) / ray_dir_x
-        else:
-            perp_wall_dist = (map_y - player.pos_y + (1 - step_y) / 2) / ray_dir_y
-            
-        # Calculate height of line to draw on screen
-        line_height = int(height / perp_wall_dist) if perp_wall_dist > 0 else height
+        # Calculate perpendicular wall distance to avoid fisheye effect
+        perp_wall_dist = ((map_x - player.pos_x + (1 - step_x) / 2) / ray_dir_x if side == 0 
+                         else (map_y - player.pos_y + (1 - step_y) / 2) / ray_dir_y)
         
-        # Calculate lowest and highest pixel to fill in current stripe
-        draw_start = -line_height // 2 + height // 2
-        if draw_start < 0:
-            draw_start = 0
-            
-        draw_end = line_height // 2 + height // 2
-        if draw_end >= height:
-            draw_end = height - 1
-            
-        # Store the data for this wall strip
+        # Use a fast integer division and clamping
+        line_height = int(height / max(0.001, perp_wall_dist))
+        draw_start = max(0, height_half - line_height // 2)
+        draw_end = min(height - 1, height_half + line_height // 2)
+        
+        # Store wall data
         wall_data.append({
             'x': x,
             'draw_start': draw_start,
             'draw_end': draw_end,
             'side': side,
-            'wall_type': wall_type if hit else 0,
+            'wall_type': wall_type,
             'perp_wall_dist': perp_wall_dist
         })
     
