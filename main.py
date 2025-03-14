@@ -23,17 +23,39 @@ pygame.display.set_caption("Pygame Setup")
 clock = pygame.time.Clock()
 FPS = DEFAULT_FPS
 
-# Set initial game map and create game instance
-current_level = "level1"
-game_map = load_level(current_level)
-game = Game(game_map, current_level)
+# Initialize with safer defaults
+try:
+    # Set initial game map and create game instance
+    current_level = "proc_0"  # Start with procedural level 0
+    game_map = load_level(current_level)
+    
+    # Verify map is valid
+    if not game_map or len(game_map) == 0 or len(game_map[0]) == 0:
+        print("Invalid initial map, falling back to level1")
+        current_level = "level1"
+        game_map = load_level(current_level)
+        
+    game = Game(game_map, current_level)
 
-# Create player instance
-player = Player()
-player.current_map = game_map  # Add this line to track current map in player
-
-# Initialize entity with map reference
-entity = generate_entity(game_map)
+    # Create player instance with better position validation
+    player = Player()
+    player.current_map = game_map
+    
+    # Ensure player is in a valid position
+    from modules.level_loader import place_player_in_valid_position
+    place_player_in_valid_position(player, game_map)
+    
+    # Initialize entity with map reference and validation
+    entity = generate_entity(game_map)
+except Exception as e:
+    print(f"Error during initialization: {e}, using failsafe settings")
+    # Failsafe initialization with predefined map
+    current_level = "level1"
+    game_map = load_level(current_level)
+    game = Game(game_map, current_level)
+    player = Player()
+    player.current_map = game_map
+    entity = generate_entity(game_map)
 
 # Game state variables
 interaction_mode = False
@@ -158,8 +180,17 @@ while running:
             
             if transition_requested:
                 # Transition to new level
-                print(f"Transitioning from {current_level} to next level...")
-                game_map, current_level, player, entity = transition_to_new_level(current_level)
+                print(f"Transitioning from {current_level} to next procedural level...")
+                try:
+                    game_map, current_level, player, entity = transition_to_new_level(current_level)
+                except Exception as e:
+                    print(f"Error during level transition: {e}, using fallback level")
+                    current_level = "level1" if current_level != "level1" else "proc_0"
+                    game_map = load_level(current_level)
+                    player = Player()
+                    player.current_map = game_map
+                    place_player_in_valid_position(player, game_map)
+                    entity = generate_entity(game_map)
                 
                 # Update references
                 player.current_map = game_map
