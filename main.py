@@ -11,6 +11,8 @@ from core.interaction import show_interaction_prompt, process_interaction_choice
 from modules.level_loader import load_level, get_level_names, transition_to_new_level
 from core.utils import draw_text, draw_fade_overlay
 from modules.dream_story import get_story_segment, process_story_choice, get_dream_summary, reset_story
+# Add texture generator import
+from modules.texture_generator import get_texture_for_level, clear_texture_cache
 
 # Initialize Pygame
 pygame.init()
@@ -69,6 +71,34 @@ fading_out = False
 fading_in = False
 transition_requested = False
 
+# Initialize texture system
+textures = {}
+def load_level_textures(level_name):
+    """Load all textures for the current level."""
+    global textures
+    if not USE_TEXTURES:
+        textures = {}
+        return
+        
+    try:
+        # Load wall textures for each type and side
+        for wall_type in range(1, 4):  # Wall types 1-3
+            for side in range(2):      # Sides 0-1
+                key = f'wall_{wall_type}_{side}'
+                textures[key] = get_texture_for_level(level_name, 'wall', wall_type)
+        
+        # Load floor and ceiling textures
+        textures['floor'] = get_texture_for_level(level_name, 'floor')
+        textures['ceiling'] = get_texture_for_level(level_name, 'ceiling')
+        
+        print(f"Loaded textures for level: {level_name}")
+    except Exception as e:
+        print(f"Error loading textures: {e}")
+        textures = {}  # Reset on error
+
+# Load initial textures
+load_level_textures(current_level)
+
 # Initialize font
 pygame.font.init()
 
@@ -103,6 +133,12 @@ while running:
             # Toggle fullscreen with F11
             elif event.key == pygame.K_F11:
                 pygame.display.toggle_fullscreen()
+            # Toggle textures with F5
+            elif event.key == pygame.K_F5:
+                USE_TEXTURES = not USE_TEXTURES
+                print(f"Textures: {'enabled' if USE_TEXTURES else 'disabled'}")
+                if USE_TEXTURES:
+                    load_level_textures(current_level)
             # Handle interaction key press (E)
             elif event.key == pygame.K_e and not interaction_mode and not story_mode and not story_outcome_mode:
                 # Optimization: Only perform raycasting if not already done
@@ -177,8 +213,8 @@ while running:
     # Fill the screen with a color
     screen.fill((0, 0, 0))
     
-    # Render the scene using the wall data
-    render_scene(screen, wall_data, WIDTH, HEIGHT)
+    # Render the scene using the wall data and textures
+    render_scene(screen, wall_data, WIDTH, HEIGHT, textures)
     
     # Render the entity
     render_entity(screen, player, entity, wall_data, WIDTH, HEIGHT)
@@ -236,6 +272,10 @@ while running:
                 print(f"Transitioning from {current_level} to next procedural level...")
                 try:
                     game_map, current_level, player, entity = transition_to_new_level(current_level)
+                    
+                    # Load textures for the new level
+                    clear_texture_cache()  # Clear old textures
+                    load_level_textures(current_level)
                 except Exception as e:
                     print(f"Error during level transition: {e}, using fallback level")
                     current_level = "level1" if current_level != "level1" else "proc_0"
@@ -244,6 +284,9 @@ while running:
                     player.current_map = game_map
                     place_player_in_valid_position(player, game_map)
                     entity = generate_entity(game_map)
+                    
+                    # Load textures for fallback level
+                    load_level_textures(current_level)
                 
                 # Update references
                 player.current_map = game_map
@@ -272,6 +315,9 @@ while running:
     
     # Update the display
     pygame.display.flip()
+
+# Clean up before quitting
+clear_texture_cache()
 
 # Quit Pygame properly
 pygame.quit()

@@ -1,5 +1,5 @@
 def raycast(player, game_map, width, height):
-    """Optimized raycasting function with better performance."""
+    """Optimized raycasting function with better performance and texture support."""
     wall_data = []
     map_width, map_height = len(game_map[0]), len(game_map)
     
@@ -61,14 +61,26 @@ def raycast(player, game_map, width, height):
         draw_start = max(0, height_half - line_height // 2)
         draw_end = min(height - 1, height_half + line_height // 2)
         
-        # Store wall data
+        # Calculate wall hit position for texturing
+        if side == 0:
+            wall_x = player.pos_y + perp_wall_dist * ray_dir_y
+        else:
+            wall_x = player.pos_x + perp_wall_dist * ray_dir_x
+        wall_x -= int(wall_x)  # Only fractional part
+        
+        # Store wall data with extended texture information
         wall_data.append({
             'x': x,
             'draw_start': draw_start,
             'draw_end': draw_end,
             'side': side,
             'wall_type': wall_type,
-            'perp_wall_dist': perp_wall_dist
+            'perp_wall_dist': perp_wall_dist,
+            'ray_dir_x': ray_dir_x,
+            'ray_dir_y': ray_dir_y,
+            'player_x': player.pos_x,
+            'player_y': player.pos_y,
+            'wall_x': wall_x  # For texture mapping
         })
     
     return wall_data

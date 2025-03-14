@@ -26,6 +26,13 @@ DEFAULT_WALL_COLOR = [(158, 158, 158), (100, 100, 100)]
 CEILING_COLOR = (50, 50, 80)  # Dark blue
 FLOOR_COLOR = (80, 80, 80)    # Gray
 
+# Texture settings
+USE_TEXTURES = True           # Enable/disable textures
+TEXTURE_SIZE = 64             # Size of texture (width and height)
+TEXTURE_QUALITY = 1           # Quality multiplier (1=normal, 2=high)
+FLOOR_TEXTURE_ENABLED = False # More expensive, disabled by default
+TEXTURE_DISTANCE_SHADING = True  # Apply distance-based shading to textures
+
 # Entity settings
 ENTITY_INTERACTION_DISTANCE = 3.0
 ENTITY_HEIGHT = 0.6

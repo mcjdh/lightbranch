@@ -143,15 +143,15 @@ class DreamManager:
             if map_features["corridors"] > map_features["open_spaces"] * 1.5:
                 labyrinthine_themes = [t for t in themes if t in ["labyrinth", "chase", "mansion"]]
                 if labyrinthine_themes:
-                    return self._weighted_theme_choice(labyrinthine_themes, 0.7)
+                    return self._weighted_theme_choice(labyrinthine_themes, base_weight=0.7)
             elif map_features["open_spaces"] > map_features["corridors"] * 1.5:
                 open_themes = [t for t in themes if t in ["flying", "falling", "floating", "water"]]
                 if open_themes:
-                    return self._weighted_theme_choice(open_themes, 0.7)
+                    return self._weighted_theme_choice(open_themes, base_weight=0.7)
             elif map_features["enclosed_areas"] > map_features["corridors"]:
                 enclosed_themes = [t for t in themes if t in ["teeth", "unprepared", "nature", "classroom"]]
                 if enclosed_themes:
-                    return self._weighted_theme_choice(enclosed_themes, 0.7)
+                    return self._weighted_theme_choice(enclosed_themes, base_weight=0.7)
         
         # For specific levels
         if level_name == "level1":
@@ -173,11 +173,15 @@ class DreamManager:
                 if self.state["emotional_state"] == "positive":
                     positive_themes = theme_categories.get("positive", [])
                     if positive_themes and random.random() < 0.6:  # 60% chance to match emotion
-                        return self._weighted_theme_choice([t for t in positive_themes if t in available_themes] or available_themes)
+                        return self._weighted_theme_choice(
+                            [t for t in positive_themes if t in available_themes] or available_themes
+                        )
                 elif self.state["emotional_state"] == "negative":
                     negative_themes = theme_categories.get("negative", [])
                     if negative_themes and random.random() < 0.6:
-                        return self._weighted_theme_choice([t for t in negative_themes if t in available_themes] or available_themes)
+                        return self._weighted_theme_choice(
+                            [t for t in negative_themes if t in available_themes] or available_themes
+                        )
                 
                 # Otherwise select from all available
                 return self._weighted_theme_choice(available_themes)
@@ -198,19 +202,25 @@ class DreamManager:
                 distance = min(abs(i - base_index), len(themes) - abs(i - base_index))
                 weights[theme] = 1.0 - (distance * 0.2)
             
-            return self._weighted_theme_choice(themes, weights)
+            return self._weighted_theme_choice(themes, weights=weights)
         else:
             # For non-procedural levels, use random selection
             return random.choice(themes)
             
     # Add the missing _weighted_theme_choice method
-    def _weighted_theme_choice(self, themes, base_weight=0.5, weights=None):
+    def _weighted_theme_choice(self, themes, weights=None, base_weight=0.5):
         """Make a weighted random choice from available themes."""
         if not themes:
             return random.choice(list(self.themes.keys()))
         
         # Use provided weights or equal weighting
         theme_weights = {}
+        
+        # Check if weights is a number (backward compatibility) or a dict
+        if isinstance(weights, (int, float)):
+            base_weight = weights
+            weights = None
+        
         for theme in themes:
             if weights and theme in weights:
                 theme_weights[theme] = weights[theme]
