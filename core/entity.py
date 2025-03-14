@@ -1,8 +1,9 @@
 import math
 import random
+import pygame
 
 class Entity:
-    def __init__(self, x, y, color):
+    def __init__(self, x, y, color, current_map=None):
         # Position on the map
         self.x = x
         self.y = y
@@ -16,10 +17,19 @@ class Entity:
         self.is_looked_at = False
         self.interaction_distance = 3.0  # Maximum distance for interaction
         self.prompt_shown = False
+        # Sprite data for rendering
+        self.sprite_width = 32
+        self.sprite_height = 64
+        # Fixed screen position (updated during rendering)
+        self.screen_x = 0
+        self.screen_y = 0
+        self.on_screen = False
+        # Store reference to current map for collision detection
+        self.current_map = current_map
 
 def generate_entity(game_map):
     """
-    Generate an entity with a random position and color.
+    Generate an entity with a valid position and color.
     
     Args:
         game_map: 2D list representing the game map
@@ -27,13 +37,32 @@ def generate_entity(game_map):
     Returns:
         Entity: A newly generated entity object
     """
-    # Find all valid positions (non-wall cells)
+    # Find all valid positions (non-wall cells with buffer from walls)
     valid_positions = []
-    for y in range(len(game_map)):
-        for x in range(len(game_map[y])):
-            # Check if position is not a wall and add some padding to avoid spawning too close to walls
+    for y in range(1, len(game_map) - 1):  # Skip border cells
+        for x in range(1, len(game_map[y]) - 1):
+            # Check if current position and surrounding cells are safe
             if game_map[y][x] == 0:
-                valid_positions.append((x + 0.5, y + 0.5))
+                # Check if it's not too close to walls
+                safe_position = True
+                
+                # Check surrounding cells in a 3x3 grid
+                for check_y in range(y-1, y+2):
+                    for check_x in range(x-1, x+2):
+                        # Skip corners (diagonal positions)
+                        if (check_x != x and check_y != y):
+                            continue
+                        
+                        # If any surrounding cell is a wall, position is not safe
+                        if check_y < 0 or check_y >= len(game_map) or check_x < 0 or check_x >= len(game_map[0]) or game_map[check_y][check_x] != 0:
+                            safe_position = False
+                            break
+                
+                if safe_position:
+                    # Add position with a random offset to avoid grid alignment
+                    pos_x = x + random.uniform(0.3, 0.7)
+                    pos_y = y + random.uniform(0.3, 0.7)
+                    valid_positions.append((pos_x, pos_y))
     
     # Select a random position from valid positions
     if valid_positions:
@@ -46,14 +75,20 @@ def generate_entity(game_map):
             random.randint(100, 255)   # B
         )
         
-        return Entity(pos_x, pos_y, random_color)
+        return Entity(pos_x, pos_y, random_color, current_map=game_map)
     
-    # Fallback if no valid positions found
-    return Entity(1.5, 1.5, (255, 0, 255))
+    # Fallback if no valid positions found - try center of a known empty cell
+    for y in range(len(game_map)):
+        for x in range(len(game_map[y])):
+            if game_map[y][x] == 0:
+                return Entity(x + 0.5, y + 0.5, (255, 0, 255), current_map=game_map)
+    
+    # Ultimate fallback
+    return Entity(1.5, 1.5, (255, 0, 255), current_map=game_map)
 
 def render_entity(screen, player, entity, wall_data, width, height):
     """
-    Render the entity using raycasting perspective.
+    Render the entity using raycasting perspective with improved stability.
     
     Args:
         screen: Pygame surface to draw on
@@ -63,70 +98,93 @@ def render_entity(screen, player, entity, wall_data, width, height):
         width: Screen width
         height: Screen height
     """
-    # Calculate distance from player to entity
+    # If entity has no map reference, update it
+    if entity.current_map is None and player.current_map is not None:
+        entity.current_map = player.current_map
+        print("Updated entity map reference")
+    
+    # Calculate vector from player to entity
     dx = entity.x - player.pos_x
     dy = entity.y - player.pos_y
-    distance = math.sqrt(dx * dx + dy * dy)
     
-    if distance < 0.1:  # Avoid division by zero and rendering if too close
+    # Calculate distance from player to entity (squared for efficiency in comparisons)
+    distance_squared = dx*dx + dy*dy
+    distance = math.sqrt(distance_squared)
+    
+    # Skip if too close to avoid rendering issues
+    if distance < 0.1:
+        entity.on_screen = False
         return
     
-    # Calculate the angle between player's direction and entity
-    angle = math.atan2(dy, dx)
-    player_angle = math.atan2(player.dir_y, player.dir_x)
+    # Calculate angle between entity and player's direction
+    # Transform entity with the inverse camera matrix
+    inv_det = 1.0 / (player.plane_x * player.dir_y - player.dir_x * player.plane_y)
     
-    # Adjust angle to be relative to player view
-    rel_angle = angle - player_angle
-    if rel_angle > math.pi:
-        rel_angle -= 2 * math.pi
-    elif rel_angle < -math.pi:
-        rel_angle += 2 * math.pi
-        
-    # Check if entity is in field of view
-    half_fov = math.atan2(player.plane_y, player.plane_x)
-    if abs(rel_angle) > half_fov * 1.5:  # Slightly wider than FOV to avoid pop-in
+    transform_x = inv_det * (player.dir_y * dx - player.dir_x * dy)
+    transform_y = inv_det * (-player.plane_y * dx + player.plane_x * dy)
+    
+    # Entity is behind the camera
+    if transform_y <= 0.1:
+        entity.on_screen = False
         return
     
-    # Calculate screen x-coordinate for entity
-    screen_x = int((0.5 + rel_angle / (2 * half_fov)) * width)
+    # Calculate the screen position using perspective projection
+    entity_screen_x = int((width / 2) * (1 + transform_x / transform_y))
     
-    # Calculate entity height on screen
-    entity_height = int(height / distance * entity.height)
+    # Calculate height on screen
+    entity_height = abs(int(height / transform_y * entity.height))
+    entity_width = entity_height // 2  # Adjust aspect ratio as needed
     
-    # Calculate vertical position
-    draw_start = (height - entity_height) // 2
-    draw_end = draw_start + entity_height
+    # Calculate vertical start and end positions
+    draw_start_y = height // 2 - entity_height // 2
+    draw_end_y = height // 2 + entity_height // 2
     
-    # Ensure draw bounds are within screen
-    if draw_start < 0:
-        draw_start = 0
-    if draw_end >= height:
-        draw_end = height - 1
-    
-    # Calculate entity width on screen
-    entity_width = entity_height // 2  # You can adjust this ratio
+    # Ensure we stay within screen bounds
+    if draw_start_y < 0: draw_start_y = 0
+    if draw_end_y >= height: draw_end_y = height - 1
     
     # Calculate horizontal bounds
-    left_bound = max(0, screen_x - entity_width // 2)
-    right_bound = min(width - 1, screen_x + entity_width // 2)
+    half_width = entity_width // 2
+    draw_start_x = entity_screen_x - half_width
+    draw_end_x = entity_screen_x + half_width
     
-    # Draw the entity
-    for x in range(left_bound, right_bound + 1):
-        # Only draw if entity is closer than the wall at this x-coordinate
-        if x >= 0 and x < len(wall_data):
-            wall_dist = wall_data[x]['perp_wall_dist']
-            if distance < wall_dist:
-                # Apply distance shading to entity color
-                distance_factor = min(8.0 / distance, 1.0)
+    # Ensure horizontal bounds are within screen
+    if draw_start_x < 0: draw_start_x = 0
+    if draw_end_x >= width: draw_end_x = width - 1
+    
+    # Update entity's screen position for interaction checks
+    entity.screen_x = entity_screen_x
+    entity.screen_y = height // 2
+    entity.on_screen = draw_end_x >= 0 and draw_start_x < width
+    
+    # Only continue if entity is on screen
+    if not entity.on_screen:
+        return
+    
+    # Draw the entity by vertical strips
+    for stripe in range(draw_start_x, draw_end_x + 1):
+        if 0 <= stripe < width and stripe < len(wall_data):
+            # Only draw if in front of wall
+            wall_dist = wall_data[stripe].get('perp_wall_dist', float('inf'))
+            if transform_y < wall_dist:
+                # Apply distance shading
+                distance_factor = min(8.0 / transform_y, 1.0)
+                
+                # Main color with distance shading
                 shaded_color = [int(c * distance_factor) for c in entity.color]
                 
-                # Draw entity strip
-                import pygame
-                pygame.draw.line(screen, shaded_color, (x, draw_start), (x, draw_end), 1)
+                # Draw the vertical strip
+                pygame.draw.line(screen, shaded_color, (stripe, draw_start_y), (stripe, draw_end_y), 1)
+                
+                # Draw outline on entity edges for better visibility
+                if (stripe == draw_start_x or stripe == draw_end_x or 
+                    abs(stripe - entity_screen_x) <= 1):
+                    outline_color = [min(c + 50, 255) for c in shaded_color]  # Lighter outline
+                    pygame.draw.line(screen, outline_color, (stripe, draw_start_y), (stripe, draw_end_y), 1)
 
 def is_player_looking_at_entity(player, entity, wall_data, width, height):
     """
-    Check if the player is looking at the entity.
+    Check if player is looking directly at entity using improved accuracy.
     
     Args:
         player: Player object containing position and direction
@@ -138,6 +196,10 @@ def is_player_looking_at_entity(player, entity, wall_data, width, height):
     Returns:
         bool: True if player is looking at the entity, False otherwise
     """
+    # If entity is not on screen, player can't be looking at it
+    if not entity.on_screen:
+        return False
+    
     # Calculate vector from player to entity
     dx = entity.x - player.pos_x
     dy = entity.y - player.pos_y
@@ -149,36 +211,49 @@ def is_player_looking_at_entity(player, entity, wall_data, width, height):
     if distance > entity.interaction_distance:
         return False
     
-    # Calculate angle between player's direction and entity
-    player_to_entity_angle = math.atan2(dy, dx)
-    player_direction_angle = math.atan2(player.dir_y, player.dir_x)
+    # Check if the entity is near the center of the screen
+    center_x = width // 2
     
-    # Calculate the difference between the angles
-    angle_diff = player_to_entity_angle - player_direction_angle
+    # Calculate the targeting range based on distance
+    # Closer entities need more precise targeting
+    targeting_range = max(width // 20, width // (10 + int(distance * 2))) 
     
-    # Normalize the angle difference to be between -pi and pi
-    while angle_diff > math.pi:
-        angle_diff -= 2 * math.pi
-    while angle_diff < -math.pi:
-        angle_diff += 2 * math.pi
-    
-    # Check if entity is in field of view (using a smaller angle for precision)
-    half_fov = math.atan2(player.plane_y, player.plane_x)
-    if abs(angle_diff) > half_fov * 0.5:  # Using a tighter cone than rendering
+    # Check if entity screen position is near center
+    if abs(entity.screen_x - center_x) > targeting_range:
         return False
     
-    # Check if there are walls between player and entity
-    # Find the x-coordinate on screen where the entity would be rendered
-    relative_angle = angle_diff / (2 * half_fov)
-    screen_x = int((0.5 + relative_angle) * width)
-    
-    # Check if screen_x is within bounds
-    if 0 <= screen_x < width:
-        # Get the wall distance at this screen column
-        wall_dist = wall_data[screen_x]['perp_wall_dist']
+    # Find the corresponding wall distance at this screen position
+    mid_x = min(width - 1, max(0, entity.screen_x))
+    if mid_x < len(wall_data):
+        wall_dist = wall_data[mid_x].get('perp_wall_dist', float('inf'))
         
-        # If the wall is further away than the entity, the player can see the entity
-        if distance < wall_dist:
-            return True
+        # If wall is closer than entity, player can't see the entity
+        if distance >= wall_dist:
+            return False
     
-    return False
+    # Check if there's a wall between player and entity
+    step_size = 0.05
+    steps = int(distance / step_size)
+    
+    # Use entity's map reference if available, otherwise fall back to player's
+    current_map = entity.current_map if entity.current_map is not None else player.current_map
+    
+    for i in range(1, steps + 1):
+        # Interpolate position between player and entity
+        t = i * step_size / distance
+        check_x = player.pos_x + dx * t
+        check_y = player.pos_y + dy * t
+        
+        # Check if this position is a wall
+        map_x, map_y = int(check_x), int(check_y)
+        
+        # Skip if out of bounds
+        if (map_y < 0 or map_y >= len(current_map) or 
+            map_x < 0 or map_x >= len(current_map[0])):
+            continue
+            
+        # If we hit a wall before reaching the entity, can't see it
+        if current_map[map_y][map_x] > 0:
+            return False
+    
+    return True

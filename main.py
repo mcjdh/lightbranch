@@ -27,8 +27,9 @@ game = Game(game_map, current_level)
 
 # Create player instance
 player = Player()
+player.current_map = game_map  # Add this line to track current map in player
 
-# Generate a random entity
+# Initialize entity with map reference
 entity = generate_entity(game_map)
 
 # Game state variables
@@ -117,10 +118,6 @@ while running:
     # Perform raycasting to get wall data
     wall_data = raycast(player, game_map, WIDTH, HEIGHT)
     
-    # Update entity interaction state
-    if not interaction_mode:
-        entity.is_looked_at = is_player_looking_at_entity(player, entity, wall_data, WIDTH, HEIGHT)
-    
     # Fill the screen with a color
     screen.fill((0, 0, 0))
     
@@ -129,6 +126,10 @@ while running:
     
     # Render the entity
     render_entity(screen, player, entity, wall_data, WIDTH, HEIGHT)
+    
+    # Update entity interaction state - AFTER rendering to use accurate screen position
+    if not interaction_mode:
+        entity.is_looked_at = is_player_looking_at_entity(player, entity, wall_data, WIDTH, HEIGHT)
     
     # Draw minimap with entity
     draw_minimap(screen, player, game_map, WIDTH, HEIGHT, [entity])
@@ -158,9 +159,28 @@ while running:
             
             if transition_requested:
                 # Transition to new level
+                print(f"Transitioning from {current_level} to next level...")
                 game_map, current_level, player, entity = transition_to_new_level(current_level)
+                print(f"Loaded level: {current_level}")
+                print(f"Entity position: ({entity.x}, {entity.y})")
+                
+                # Update references
+                player.current_map = game_map
+                entity.current_map = game_map
                 game.map = game_map
                 game.current_level = current_level
+                
+                # Give the entity a bright color to make it more visible for debugging
+                if not entity.color[0] > 180:  # Only if not already bright
+                    entity.color = (255, 200, 100)  # Bright orange-yellow
+                
+                # Check if entity is reachable from player position
+                from modules.level_loader import is_path_between
+                if is_path_between(game_map, player.pos_x, player.pos_y, entity.x, entity.y):
+                    print("Entity is reachable from player position - path confirmed!")
+                else:
+                    print("WARNING: Entity might not be reachable!")
+                
                 transition_requested = False
                 fading_in = True
         

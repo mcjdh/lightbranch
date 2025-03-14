@@ -19,6 +19,9 @@ class Player:
         
         # Rotation speed
         self.rot_speed = 0.03
+        
+        # Current map reference (added)
+        self.current_map = None
 
     def rotate(self, angle):
         """Rotate the player direction and camera plane vectors by the given angle."""
