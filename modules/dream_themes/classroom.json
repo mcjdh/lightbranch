@@ -1,0 +1,28 @@
+{
+  "narratives": [
+    "You're sitting in a classroom you don't recognize, facing an important test.",
+    "The teacher calls your name, but you can't remember what class this is.",
+    "Words on the blackboard shift and change as you try to read them.",
+    "Empty desks surround you in a classroom that grows larger as you watch."
+  ],
+  "questions": [
+    "Do you raise your hand to ask a question?",
+    "Do you try to remember what you studied?",
+    "Do you look at another student's paper?",
+    "Do you get up and walk to the door?"
+  ],
+  "outcomes": {
+    "yes": [
+      "All eyes turn to you as your hand rises, and suddenly you know exactly what to ask.",
+      "Fragments of knowledge surface in your mind, forming connections you didn't see before.",
+      "The answers on your neighbor's test shift and morph, revealing insights beyond the questions.",
+      "As you approach the door, it opens to a completely different place than the hallway you expected."
+    ],
+    "no": [
+      "You remain silent as the lesson continues, feeling increasingly lost as concepts build upon each other.",
+      "The knowledge eludes you, slipping away like water through your fingers.",
+      "You work alone, the symbols and questions becoming more abstract and incomprehensible.",
+      "You stay in your seat as the classroom stretches farther away, the exit becoming distant and unreachable."
+    ]
+  }
+}

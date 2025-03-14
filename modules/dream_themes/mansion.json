@@ -1,0 +1,28 @@
+{
+  "narratives": [
+    "You find yourself in a vast mansion with endless hallways and rooms.",
+    "The grand staircase before you spirals upward, fading into darkness.",
+    "Doors open to reveal more doors behind them, multiplying endlessly.",
+    "You wander through a house that seems to remember you, though you've never been here."
+  ],
+  "questions": [
+    "Do you ascend to the upper floors?",
+    "Do you search for the owner of this place?",
+    "Do you try to find an exit?",
+    "Do you open the door with strange symbols carved into it?"
+  ],
+  "outcomes": {
+    "yes": [
+      "Each step upward takes you deeper into the mansion's mysteries, the staircase extending impossibly high.",
+      "You feel a presence watching you, always just around the corner or behind the next door.",
+      "Each attempt to leave leads you further in, as if the house itself wants to keep you.",
+      "The door swings open silently, revealing a room that seems to exist outside of the mansion entirely."
+    ],
+    "no": [
+      "You remain on the ground level, exploring rooms that shift when you're not looking directly at them.",
+      "You continue alone through the silent halls, feeling like an intruder in a place that knows you're there.",
+      "You resign yourself to wandering the corridors, which seem to rearrange themselves around you.",
+      "The door remains closed, but you can feel something awaiting your decision on the other side."
+    ]
+  }
+}

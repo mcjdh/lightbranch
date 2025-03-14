@@ -75,6 +75,11 @@ pygame.font.init()
 # Initialize dream story system
 reset_story()
 
+# Initialize variables for dream summary display
+dream_summary_update_timer = 0
+dream_summary_update_interval = 1.0  # Update every 1 second
+current_dream_summary = get_dream_summary()
+
 # Main game loop
 running = True
 while running:
@@ -188,9 +193,14 @@ while running:
     # Display FPS counter
     display_fps(screen, clock)
     
-    # Display dream journey summary
-    dream_summary = get_dream_summary()
-    draw_text(screen, dream_summary, (WIDTH // 2, 30), 
+    # Update dream summary text less frequently to prevent flickering
+    dream_summary_update_timer += dt
+    if dream_summary_update_timer >= dream_summary_update_interval:
+        current_dream_summary = get_dream_summary()
+        dream_summary_update_timer = 0
+    
+    # Display dream journey summary (using cached value)
+    draw_text(screen, current_dream_summary, (WIDTH // 2, 30), 
              centered=True, size=18, color=(200, 200, 255))
     
     # Show interaction gaze indicator when looking at entity but not in interaction mode

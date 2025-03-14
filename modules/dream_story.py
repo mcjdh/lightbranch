@@ -3,9 +3,11 @@ Dream story generation module for Some Dream game.
 Provides procedurally generated dream narratives and tracks story progression.
 """
 import random
+import os
+import json
 from collections import defaultdict
 
-# Story state
+# Story state - kept for backwards compatibility
 story_state = {
     "visited_dreams": set(),  # Tracks which dream types player has seen
     "choices_made": {},       # Tracks choices player has made
@@ -14,400 +16,566 @@ story_state = {
     "emotional_state": "neutral", # Current emotional state of the dream
 }
 
-# Dream themes with associated narratives and choices
-DREAM_THEMES = {
-    "falling": {
-        "narratives": [
-            "You're falling through an endless sky, clouds rushing past you.",
-            "The ground approaches rapidly, but you feel strangely calm.",
-            "You plummet from a great height, the wind rushing through your hair.",
-            "The sensation of falling wakes you with a jolt, but you're still here.",
-        ],
-        "questions": [
-            "Do you try to fly?",
-            "Do you accept the fall?",
-            "Do you close your eyes?",
-            "Do you reach out for something to grab?",
-        ],
-        "outcomes": {
-            "yes": [
-                "You spread your arms and begin to glide, the falling transforms into flying.",
-                "Your acceptance brings a strange peace as you continue descending.",
-                "Darkness envelops you, creating a cocoon of calm in the chaos.",
-                "Your hand catches something invisible, stopping your descent instantly.",
-            ],
-            "no": [
-                "You struggle against the inevitable pull downward, tumbling wildly.",
-                "Panic sets in as you fight against the fall, your heart racing.",
-                "Your eyes remain fixed on the approaching ground, terror mounting.",
-                "You curl into yourself, becoming smaller as you continue to fall.",
-            ]
-        }
-    },
-    "chase": {
-        "narratives": [
-            "Something is pursuing you through endless corridors.",
-            "Your legs feel heavy as you try to escape what's behind you.",
-            "No matter how fast you run, the footsteps behind you stay close.",
-            "You hide, holding your breath, as something searches for you.",
-        ],
-        "questions": [
-            "Do you turn to face it?",
-            "Do you try to run faster?",
-            "Do you call for help?",
-            "Do you find a place to hide?",
-        ],
-        "outcomes": {
-            "yes": [
-                "You turn, ready to confront your pursuer, but see only shadows.",
-                "You push yourself beyond your limits, gaining distance from the threat.",
-                "Your voice echoes but someone—or something—responds in the distance.",
-                "You discover a perfect hiding spot, tucked away from prying eyes.",
-            ],
-            "no": [
-                "You continue fleeing, the presence behind you growing ever closer.",
-                "Your limbs grow heavier, movements becoming sluggish and difficult.",
-                "Silence is your only companion as you continue your desperate flight.",
-                "Exposed and vulnerable, you keep moving as quietly as possible.",
-            ]
-        }
-    },
-    "flying": {
-        "narratives": [
-            "You're soaring above a landscape of impossible geography.",
-            "The sensation of weightlessness fills you with exhilaration.",
-            "Wind rushes past as you navigate between towers of cloud.",
-            "You hover above your sleeping body, free from physical constraints.",
-        ],
-        "questions": [
-            "Do you fly higher?",
-            "Do you look down?",
-            "Do you try to reach the horizon?",
-            "Do you test your new abilities?",
-        ],
-        "outcomes": {
-            "yes": [
-                "You ascend toward the stratosphere, the world becoming tiny below.",
-                "Vertigo grips you as you see how far you've come from the ground.",
-                "The horizon approaches but seems to extend endlessly before you.",
-                "You perform impossible aerial maneuvers, free from physical limitations.",
-            ],
-            "no": [
-                "You maintain your altitude, gliding peacefully through the air.",
-                "Your gaze remains fixed ahead, afraid of what looking down might bring.",
-                "You circle aimlessly, enjoying the sensation without direction.",
-                "You fly cautiously, unsure of the rules governing this strange ability.",
-            ]
-        }
-    },
-    "unprepared": {
-        "narratives": [
-            "You suddenly realize you're in public without proper clothes.",
-            "You're taking a test for a class you never attended.",
-            "You're performing on stage but don't know any of the lines.",
-            "You've arrived at an important meeting completely unprepared.",
-        ],
-        "questions": [
-            "Do you pretend everything is normal?",
-            "Do you try to escape the situation?",
-            "Do you admit your unpreparedness?",
-            "Do you look for help around you?",
-        ],
-        "outcomes": {
-            "yes": [
-                "You act with confidence and no one seems to notice anything amiss.",
-                "You find an exit, a way out of this embarrassing predicament.",
-                "Your honesty is met with unexpected understanding and support.",
-                "A friendly face in the crowd nods, offering silent assistance.",
-            ],
-            "no": [
-                "Your discomfort is painfully obvious to everyone around you.",
-                "You remain trapped in the situation as anxiety builds.",
-                "You fumble forward, trying to hide your lack of preparation.",
-                "You stand alone, the weight of expectations crushing you.",
-            ]
-        }
-    },
-    "labyrinth": {
-        "narratives": [
-            "You wander through rooms that impossibly connect to one another.",
-            "Doors lead to places that shouldn't exist in the same building.",
-            "The hallway extends and contracts as you walk through it.",
-            "You recognize this place, but everything is slightly wrong.",
-        ],
-        "questions": [
-            "Do you try to map the impossible space?",
-            "Do you follow the strange logic of this place?",
-            "Do you look for someone else caught in this maze?",
-            "Do you close your eyes and trust intuition?",
-        ],
-        "outcomes": {
-            "yes": [
-                "Patterns emerge in the chaos, revealing a hidden order to the space.",
-                "By accepting the dream logic, the pathways begin to make sense to you.",
-                "You spot another figure in the distance, also searching for a way out.",
-                "With eyes closed, your feet carry you confidently forward.",
-            ],
-            "no": [
-                "The more you try to apply reason, the more chaotic the space becomes.",
-                "You fight against the dream's rules, becoming more disoriented.",
-                "Isolation presses in as you wander the shifting corridors alone.",
-                "You stumble forward, eyes open but unseeing of the true path.",
-            ]
-        }
-    },
-    "teeth": {
-        "narratives": [
-            "Your teeth begin to crumble and fall out one by one.",
-            "You feel a loose tooth, then another, and another.",
-            "Something is wrong with your mouth—teeth shifting and breaking.",
-            "You run your tongue over your teeth and feel them disintegrating.",
-        ],
-        "questions": [
-            "Do you try to save the remaining teeth?",
-            "Do you seek a mirror to examine yourself?",
-            "Do you ask someone nearby for help?",
-            "Do you accept this transformation?",
-        ],
-        "outcomes": {
-            "yes": [
-                "You cup your hands, collecting the fallen pieces of yourself.",
-                "Your reflection reveals something unexpected about your true nature.",
-                "A stranger approaches, offering mysterious advice about your condition.",
-                "The discomfort fades as you allow yourself to change and transform.",
-            ],
-            "no": [
-                "More teeth loosen and fall, an unstoppable cascade of loss.",
-                "You avoid your reflection, afraid of what you might see.",
-                "You suffer in isolation, unwilling to reveal your vulnerability.",
-                "You fight the change, causing greater pain and discomfort.",
-            ]
-        }
-    }
-}
-
-def get_dream_theme_for_level(level_name, game_map=None):
-    """
-    Determine appropriate dream theme based on level characteristics.
+# Create a DreamManager class to handle dream story generation
+class DreamManager:
+    """Manages dream narratives and story progression."""
     
-    Args:
-        level_name: Current level identifier
-        game_map: The current game map (for additional analysis)
+    def __init__(self):
+        # Initialize with existing story state for backward compatibility
+        self.state = story_state
+        self.themes = {}
+        # Add dream summary cache to fix glitchy text
+        self._dream_summary_cache = "The dream begins..."
+        self._last_summary_state = {
+            "dream_depth": 0,
+            "emotional_state": "neutral",
+            "recurring_elements": [],
+            "visited_dreams": set()
+        }
+        self._load_theme_data()
+    
+    def _load_theme_data(self):
+        """Load theme data from built-in themes and external JSON files."""
+        from . import dream_themes_builtin
         
-    Returns:
-        string: Theme identifier
-    """
-    themes = list(DREAM_THEMES.keys())
+        # First load built-in themes from the module
+        self.themes = dream_themes_builtin.DREAM_THEMES.copy()
+        
+        # Then try to load additional themes from files if they exist
+        theme_dir = os.path.join(os.path.dirname(__file__), 'dream_themes')
+        if os.path.exists(theme_dir):
+            for filename in os.listdir(theme_dir):
+                if filename.endswith('.json'):
+                    try:
+                        with open(os.path.join(theme_dir, filename), 'r') as f:
+                            new_theme = json.load(f)
+                            theme_id = filename.split('.')[0]
+                            
+                            # Validate theme structure
+                            if self._validate_theme(new_theme):
+                                self.themes[theme_id] = new_theme
+                                print(f"Loaded dream theme: {theme_id}")
+                            else:
+                                print(f"Invalid theme structure in {filename}")
+                    except Exception as e:
+                        print(f"Error loading dream theme {filename}: {e}")
+        
+        print(f"Total dream themes loaded: {len(self.themes)}")
     
-    # Extract level number if procedural
-    level_num = 0
-    if level_name.startswith("proc_"):
-        try:
-            level_num = int(level_name.split("_")[1])
-        except (ValueError, IndexError):
-            pass
-    
-    # If we have a map, try to determine theme from structure
-    if game_map:
-        # Detect labyrinthine maps
-        if level_name.startswith("proc_") and len(game_map) > 12:
-            corridors = 0
-            open_spaces = 0
+    def _validate_theme(self, theme):
+        """Validate that a theme has the required structure."""
+        required_keys = ["narratives", "questions", "outcomes"]
+        outcome_keys = ["yes", "no"]
+        
+        # Check basic structure
+        if not all(key in theme for key in required_keys):
+            return False
             
-            # Sample the map to determine its nature
-            for y in range(1, len(game_map)-1, 2):
-                for x in range(1, len(game_map[0])-1, 2):
-                    if game_map[y][x] == 0:
-                        # Count adjacent open spaces
-                        adjacent_open = 0
-                        for dx, dy in [(0,1), (1,0), (0,-1), (-1,0)]:
-                            nx, ny = x+dx, y+dy
-                            if (0 <= nx < len(game_map[0]) and 
-                                0 <= ny < len(game_map) and 
-                                game_map[ny][nx] == 0):
-                                adjacent_open += 1
-                        
-                        if adjacent_open <= 2:
-                            corridors += 1
-                        else:
-                            open_spaces += 1
+        # Check that outcomes contains yes/no
+        if not all(key in theme["outcomes"] for key in outcome_keys):
+            return False
             
-            if corridors > open_spaces * 2:
-                return "labyrinth"
-            elif open_spaces > corridors * 2:
-                return "flying"
+        # Check that lists have content and matching lengths
+        if (len(theme["narratives"]) == 0 or
+            len(theme["questions"]) == 0 or
+            len(theme["outcomes"]["yes"]) != len(theme["questions"]) or
+            len(theme["outcomes"]["no"]) != len(theme["questions"])):
+            return False
+            
+        return True
     
-    # For specific levels
-    if level_name == "level1":
-        return "falling"
+    # Add the missing _analyze_map_features method
+    def _analyze_map_features(self, game_map):
+        """Analyze map features to determine appropriate themes."""
+        features = {
+            "corridors": 0,
+            "open_spaces": 0,
+            "enclosed_areas": 0,
+            "verticality": 0
+        }
+        
+        # Skip if map is too small
+        if len(game_map) <= 5 or len(game_map[0]) <= 5:
+            return features
+            
+        # Sample the map to determine its nature
+        for y in range(1, len(game_map)-1, 2):
+            for x in range(1, len(game_map[0])-1, 2):
+                if game_map[y][x] == 0:  # If it's an open space
+                    # Count adjacent open spaces
+                    adjacent_open = 0
+                    for dx, dy in [(0,1), (1,0), (0,-1), (-1,0)]:
+                        nx, ny = x+dx, y+dy
+                        if (0 <= nx < len(game_map[0]) and 
+                            0 <= ny < len(game_map) and 
+                            game_map[ny][nx] == 0):
+                            adjacent_open += 1
+                    
+                    if adjacent_open <= 1:
+                        features["enclosed_areas"] += 1
+                    elif adjacent_open == 2:
+                        features["corridors"] += 1
+                    else:
+                        features["open_spaces"] += 1
+        
+        return features
     
-    # Otherwise select based on level number or random if not procedural
-    if level_name.startswith("proc_"):
-        index = level_num % len(themes)
-        theme = themes[index]
+    def get_theme_for_level(self, level_name, game_map=None):
+        """Select an appropriate dream theme based on level characteristics."""
+        themes = list(self.themes.keys())
+        if not themes:
+            print("WARNING: No dream themes available!")
+            return None
         
-        # For variety, occasionally override with random theme
-        if level_num > 0 and level_num % 3 == 0:
-            # Exclude the theme we just used
-            available_themes = [t for t in themes if t != theme]
-            theme = random.choice(available_themes)
+        # Extract level number if procedural
+        level_num = 0
+        if level_name.startswith("proc_"):
+            try:
+                level_num = int(level_name.split("_")[1])
+            except (ValueError, IndexError):
+                pass
         
-        return theme
-    else:
+        # Use map structure to influence theme selection
+        if game_map:
+            map_features = self._analyze_map_features(game_map)
+            
+            # Choose theme based on map features
+            if map_features["corridors"] > map_features["open_spaces"] * 1.5:
+                labyrinthine_themes = [t for t in themes if t in ["labyrinth", "chase", "mansion"]]
+                if labyrinthine_themes:
+                    return self._weighted_theme_choice(labyrinthine_themes, 0.7)
+            elif map_features["open_spaces"] > map_features["corridors"] * 1.5:
+                open_themes = [t for t in themes if t in ["flying", "falling", "floating", "water"]]
+                if open_themes:
+                    return self._weighted_theme_choice(open_themes, 0.7)
+            elif map_features["enclosed_areas"] > map_features["corridors"]:
+                enclosed_themes = [t for t in themes if t in ["teeth", "unprepared", "nature", "classroom"]]
+                if enclosed_themes:
+                    return self._weighted_theme_choice(enclosed_themes, 0.7)
+        
+        # For specific levels
+        if level_name == "level1":
+            if "falling" in themes:
+                return "falling"
+            else:
+                return random.choice(themes)
+        
+        # Avoid repeating recent themes
+        if len(self.state["visited_dreams"]) > 0:
+            recent_themes = list(self.state["visited_dreams"])[-2:]
+            available_themes = [t for t in themes if t not in recent_themes]
+            
+            if available_themes:
+                # Group themes by emotional tone for smarter selection
+                theme_categories = self._categorize_themes()
+                
+                # Select based on emotional state
+                if self.state["emotional_state"] == "positive":
+                    positive_themes = theme_categories.get("positive", [])
+                    if positive_themes and random.random() < 0.6:  # 60% chance to match emotion
+                        return self._weighted_theme_choice([t for t in positive_themes if t in available_themes] or available_themes)
+                elif self.state["emotional_state"] == "negative":
+                    negative_themes = theme_categories.get("negative", [])
+                    if negative_themes and random.random() < 0.6:
+                        return self._weighted_theme_choice([t for t in negative_themes if t in available_themes] or available_themes)
+                
+                # Otherwise select from all available
+                return self._weighted_theme_choice(available_themes)
+        
+        # Use procedural selection based on level number
+        if level_name.startswith("proc_"):
+            # Use level number to seed the selection, but add randomness
+            base_index = level_num % len(themes)
+            
+            # For some levels, pick completely randomly for variety
+            if level_num > 0 and random.random() < 0.3:
+                return random.choice(themes)
+            
+            # Otherwise use a weighted selection around the base index
+            weights = {}
+            for i, theme in enumerate(themes):
+                # Higher weight for the base theme, lower for others
+                distance = min(abs(i - base_index), len(themes) - abs(i - base_index))
+                weights[theme] = 1.0 - (distance * 0.2)
+            
+            return self._weighted_theme_choice(themes, weights)
+        else:
+            # For non-procedural levels, use random selection
+            return random.choice(themes)
+            
+    # Add the missing _weighted_theme_choice method
+    def _weighted_theme_choice(self, themes, base_weight=0.5, weights=None):
+        """Make a weighted random choice from available themes."""
+        if not themes:
+            return random.choice(list(self.themes.keys()))
+        
+        # Use provided weights or equal weighting
+        theme_weights = {}
+        for theme in themes:
+            if weights and theme in weights:
+                theme_weights[theme] = weights[theme]
+            else:
+                theme_weights[theme] = base_weight
+        
+        # Normalize weights
+        total = sum(theme_weights.values())
+        if total > 0:  # Avoid division by zero
+            for theme in theme_weights:
+                theme_weights[theme] /= total
+        else:
+            # If all weights are zero, use equal weights
+            for theme in theme_weights:
+                theme_weights[theme] = 1.0 / len(theme_weights)
+        
+        # Make weighted choice
+        r = random.random()
+        cumulative = 0
+        for theme, weight in theme_weights.items():
+            cumulative += weight
+            if r <= cumulative:
+                return theme
+        
+        # Fallback
         return random.choice(themes)
+    
+    def _categorize_themes(self):
+        """Categorize themes by emotional tone for more coherent selection."""
+        categories = {
+            "positive": ["flying", "nature", "floating", "water"],
+            "negative": ["chase", "teeth", "unprepared"],
+            "neutral": ["labyrinth", "falling", "classroom", "mansion"]
+        }
+        
+        # Ensure all themes are categorized
+        all_themes = set(self.themes.keys())
+        categorized = set()
+        for themes in categories.values():
+            categorized.update(themes)
+        
+        # Add uncategorized themes to neutral
+        uncategorized = all_themes - categorized
+        categories["neutral"].extend(uncategorized)
+        
+        return categories
+    
+    def _enhance_narrative(self, base_narrative, theme):
+        """Add procedural enhancements to the narrative."""
+        narrative = base_narrative
+        
+        # Add recurring elements from previous dreams
+        if self.state["recurring_elements"] and random.random() < 0.3:
+            element = random.choice(self.state["recurring_elements"])
+            
+            # Use varied phrasing for recurring elements
+            phrases = [
+                f"{element} appears again in the distance.",
+                f"{element} seems familiar to you.",
+                f"You recognize {element} from a previous dream.",
+                f"{element} follows you through the dreamscape."
+            ]
+            narrative += f" {random.choice(phrases)}"
+        
+        # Add depth indicators
+        if self.state["dream_depth"] > 3:
+            depth_phrases = [
+                "Deeper in the dream:",
+                "As you sink further into sleep:",
+                "The dream intensifies:",
+                "Reality grows more distant:",
+                "The veil between dreams thins:",
+                "Dream logic strengthens:"
+            ]
+            narrative = f"{random.choice(depth_phrases)} {narrative}"
+        
+        # Adjust tone based on emotional state
+        if self.state["emotional_state"] == "positive" and random.random() < 0.3:
+            positive_modifiers = [
+                "A sense of calm pervades the scene.",
+                "There's an unusual clarity to everything.",
+                "You feel oddly at peace here.",
+                "A pleasant warmth surrounds you.",
+                "Colors seem more vibrant here."
+            ]
+            narrative += f" {random.choice(positive_modifiers)}"
+        elif self.state["emotional_state"] == "negative" and random.random() < 0.3:
+            negative_modifiers = [
+                "An undercurrent of anxiety flows beneath the surface.",
+                "Something feels wrong about this place.",
+                "Unease settles in your chest.",
+                "Shadows seem to move at the edge of your vision.",
+                "A faint sense of dread accompanies you."
+            ]
+            narrative += f" {random.choice(negative_modifiers)}"
+        
+        return narrative
+    
+    def _enhance_outcome(self, base_outcome, theme, choice):
+        """Add procedural enhancements to the outcome text."""
+        outcome = base_outcome
+        
+        # Add depth-based reflections
+        if self.state["dream_depth"] >= 3 and random.random() < 0.4:
+            reflections = [
+                "Something about this feels significant.",
+                "A pattern seems to be forming in your dreams.",
+                "The meaning just eludes your grasp.",
+                "This choice will echo in later dreams.",
+                "Deep meaning resonates beneath the surface.",
+                "This moment feels connected to something larger."
+            ]
+            outcome += f" {random.choice(reflections)}"
+        
+        # Add emotional coloring occasionally
+        if random.random() < 0.3:
+            if choice == 'yes':
+                yes_reflections = [
+                    "There's a sense of rightness to your decision.",
+                    "You feel you've chosen well.",
+                    "Something aligns within you.",
+                    "This path feels meant to be."
+                ]
+                outcome += f" {random.choice(yes_reflections)}"
+            else:
+                no_reflections = [
+                    "You wonder what would have happened if you chose differently.",
+                    "A path not taken lingers in your thoughts.",
+                    "The alternative choice echoes in your mind.",
+                    "You feel a moment of hesitation about your decision."
+                ]
+                outcome += f" {random.choice(no_reflections)}"
+        
+        # Hint at future dreams rarely
+        if self.state["dream_depth"] >= 2 and random.random() < 0.2:
+            foreshadowing = [
+                "You sense this isn't the last time you'll face such a choice.",
+                "This moment will recur in different forms.",
+                "The dream remembers your decision.",
+                "Future dreams will build upon this moment."
+            ]
+            outcome += f" {random.choice(foreshadowing)}"
+        
+        return outcome
+    
+    def _update_recurring_elements(self, theme, choice):
+        """Update recurring elements based on theme and choice."""
+        new_element = None
+        
+        # Dictionary of elements by theme and choice
+        theme_elements = {
+            "falling": {"yes": "The sensation of weightlessness", 
+                       "no": "The fear of impact"},
+            "chase": {"yes": "The face of your pursuer", 
+                     "no": "The sound of distant footsteps"},
+            "flying": {"yes": "A glimpse of something beyond the clouds", 
+                      "no": "The fear of falling"},
+            "labyrinth": {"yes": "A mysterious door", 
+                         "no": "The feeling of being lost"},
+            "teeth": {"yes": "The feeling of transformation", 
+                     "no": "The feeling of something missing"},
+            "unprepared": {"yes": "An unexpected supporter", 
+                          "no": "The weight of judgment"},
+            "nature": {"yes": "The language of plants", 
+                      "no": "Eyes watching from the foliage"},
+            "water": {"yes": "The freedom of breathing underwater", 
+                     "no": "The depths below"},
+            "mansion": {"yes": "A familiar room", 
+                       "no": "A locked door"},
+            "classroom": {"yes": "An important lesson", 
+                         "no": "A crucial test"}
+        }
+        
+        # Get element if theme and choice match
+        if theme in theme_elements and choice in theme_elements[theme]:
+            new_element = theme_elements[theme][choice]
+        
+        # Add procedurally generated elements occasionally
+        if not new_element and random.random() < 0.2:
+            procedural_elements = [
+                "A symbol you can't quite remember",
+                "A familiar voice calling your name",
+                "The scent of something from your childhood",
+                "A color that seems to have meaning",
+                "The sensation of being watched",
+                "A melody that feels important",
+                "An object that shouldn't exist",
+                "A phrase repeated in whispers",
+                "A figure glimpsed in periphery",
+                "A clock showing impossible time"
+            ]
+            new_element = random.choice(procedural_elements)
+        
+        # Add the element if one was selected
+        if new_element:
+            if new_element in self.state["recurring_elements"]:
+                # Move to the end if already present
+                self.state["recurring_elements"].remove(new_element)
+            self.state["recurring_elements"].append(new_element)
+            
+            # Limit recurring elements
+            if len(self.state["recurring_elements"]) > 3:
+                self.state["recurring_elements"] = self.state["recurring_elements"][-3:]
+    
+    def get_story_segment(self, level_name, game_map=None):
+        """Generate a story segment for the current level."""
+        # Determine the dream theme
+        theme = self.get_theme_for_level(level_name, game_map)
+        
+        # Get theme data
+        theme_data = self.themes[theme]
+        
+        # Update state
+        self.state["visited_dreams"].add(theme)
+        self.state["dream_depth"] += 1
+        
+        # Select narrative and question
+        visits = list(self.state["visited_dreams"]).count(theme)
+        narrative_index = (visits - 1) % len(theme_data["narratives"])
+        question_index = (visits - 1) % len(theme_data["questions"])
+        
+        # Get narrative text with procedural enhancements
+        narrative = self._enhance_narrative(
+            theme_data["narratives"][narrative_index],
+            theme
+        )
+        
+        # Get question with procedural enhancements
+        question = theme_data["questions"][question_index]
+        
+        # Get outcomes
+        yes_outcome = theme_data["outcomes"]["yes"][question_index]
+        no_outcome = theme_data["outcomes"]["no"][question_index]
+        
+        # Return formatted story segment (matching original format)
+        return {
+            "theme": theme,
+            "narrative": narrative,
+            "question": question,
+            "yes_outcome": yes_outcome,
+            "no_outcome": no_outcome,
+            "choices": ["Y - Yes", "N - No"]
+        }
+
+    def process_choice(self, choice, theme, question_index):
+        """Process player choice and update story state."""
+        # Record the choice
+        if theme not in self.state["choices_made"]:
+            self.state["choices_made"][theme] = []
+        
+        self.state["choices_made"][theme].append(choice)
+        
+        # Update emotional state
+        yes_count = sum(1 for c in self.state["choices_made"].get(theme, []) if c == 'yes')
+        no_count = sum(1 for c in self.state["choices_made"].get(theme, []) if c == 'no')
+        
+        if yes_count > no_count:
+            self.state["emotional_state"] = "positive"
+        elif no_count > yes_count:
+            self.state["emotional_state"] = "negative"
+        else:
+            self.state["emotional_state"] = "neutral"
+        
+        # Update recurring elements based on theme and choices
+        self._update_recurring_elements(theme, choice)
+        
+        # Get the appropriate outcome
+        theme_data = self.themes[theme]
+        outcome_text = theme_data["outcomes"]["yes" if choice == 'yes' else "no"][question_index]
+        
+        # Add procedural enhancements to the outcome
+        enhanced_outcome = self._enhance_outcome(outcome_text, theme, choice)
+        
+        return enhanced_outcome
+
+    def get_dream_summary(self):
+        """Generate a summary of the dream journey."""
+        # Check if state has changed since last summary generation
+        if (self.state["dream_depth"] == self._last_summary_state["dream_depth"] and
+            self.state["emotional_state"] == self._last_summary_state["emotional_state"] and
+            self.state["recurring_elements"] == self._last_summary_state["recurring_elements"] and
+            self.state["visited_dreams"] == self._last_summary_state["visited_dreams"]):
+            # Return cached summary if state hasn't changed
+            return self._dream_summary_cache
+        
+        # Generate new summary if state has changed
+        if self.state["dream_depth"] <= 0:
+            summary = "The dream begins..."
+        else:
+            themes_seen = len(self.state["visited_dreams"])
+            
+            if themes_seen == 0:
+                summary = "Your dream journey is just beginning..."
+            else:
+                # Create a richer summary
+                parts = []
+                
+                # Depth indicator - use fixed text based on depth range to avoid random changes
+                if self.state["dream_depth"] < 3:
+                    if self.state["dream_depth"] == 1:
+                        depth_text = "You are still near the surface of your dream."
+                    else:
+                        depth_text = "The dreaming has just begun."
+                elif self.state["dream_depth"] < 6:
+                    if self.state["dream_depth"] <= 4:
+                        depth_text = "You are descending deeper into your subconscious."
+                    else:
+                        depth_text = "Layers of dreaming enfold you."
+                else:
+                    if self.state["dream_depth"] < 8:
+                        depth_text = "You have journeyed deep into the dream world."
+                    else:
+                        depth_text = "The logic of dreams has replaced reality."
+                parts.append(depth_text)
+                
+                # Emotional state - fixed mapping instead of random choice
+                emotion_mapping = {
+                    "positive": "Your journey has been mostly hopeful.",
+                    "negative": "Your path has been filled with anxiety.",
+                    "neutral": "Your dream has been a balance of light and dark."
+                }
+                emotion_text = emotion_mapping[self.state["emotional_state"]]
+                parts.append(emotion_text)
+                
+                # Add recurring elements if any - use the most recent one for stability
+                if self.state["recurring_elements"]:
+                    element = self.state["recurring_elements"][-1]  # Use last/most recent element
+                    parts.append(f"{element} seems significant.")
+                
+                summary = " ".join(parts)
+        
+        # Update cache and last state
+        self._dream_summary_cache = summary
+        self._last_summary_state = {
+            "dream_depth": self.state["dream_depth"],
+            "emotional_state": self.state["emotional_state"],
+            "recurring_elements": self.state["recurring_elements"].copy(),
+            "visited_dreams": self.state["visited_dreams"].copy()
+        }
+        
+        return self._dream_summary_cache
+    
+# Create a singleton instance
+_dream_manager = DreamManager()
+
+# Compatibility functions that use the DreamManager instance
+def get_dream_theme_for_level(level_name, game_map=None):
+    """Compatibility wrapper for DreamManager.get_theme_for_level."""
+    return _dream_manager.get_theme_for_level(level_name, game_map)
 
 def get_story_segment(level_name, game_map=None):
-    """
-    Get a story segment for the current level.
-    
-    Args:
-        level_name: Current level identifier
-        game_map: The current game map
-        
-    Returns:
-        dict: Story segment with narrative, question and choices
-    """
-    global story_state
-    
-    # Determine the dream theme
-    theme = get_dream_theme_for_level(level_name, game_map)
-    
-    # Track that we've visited this dream theme
-    story_state["visited_dreams"].add(theme)
-    
-    # Increase dream depth
-    story_state["dream_depth"] += 1
-    
-    # Get the theme data
-    theme_data = DREAM_THEMES[theme]
-    
-    # Select narrative and question based on how many times we've seen this theme
-    visits = list(story_state["visited_dreams"]).count(theme)
-    
-    # Get indices, wrapping around if needed
-    narrative_index = (visits - 1) % len(theme_data["narratives"])
-    question_index = (visits - 1) % len(theme_data["questions"])
-    
-    # Get the narrative and question
-    narrative = theme_data["narratives"][narrative_index]
-    question = theme_data["questions"][question_index]
-    
-    # Extract outcomes for this question
-    yes_outcome = theme_data["outcomes"]["yes"][question_index]
-    no_outcome = theme_data["outcomes"]["no"][question_index]
-    
-    # Add recurring elements and adapt based on emotional state
-    if story_state["recurring_elements"]:
-        element = random.choice(story_state["recurring_elements"])
-        if random.random() < 0.3:  # 30% chance to include recurring element
-            narrative += f" {element} appears again in the distance."
-    
-    if story_state["dream_depth"] > 3:
-        # Add sense of increasing depth
-        narrative = f"Deeper in the dream: {narrative}"
-    
-    # Format the story segment
-    return {
-        "theme": theme,
-        "narrative": narrative,
-        "question": question,
-        "yes_outcome": yes_outcome,
-        "no_outcome": no_outcome,
-        "choices": ["Y - Yes", "N - No"]
-    }
+    """Compatibility wrapper for DreamManager.get_story_segment."""
+    return _dream_manager.get_story_segment(level_name, game_map)
 
 def process_story_choice(choice, theme, question_index):
-    """
-    Process the player's choice and update story state.
-    
-    Args:
-        choice: 'yes' or 'no' 
-        theme: Current dream theme
-        question_index: Index of the question that was asked
-        
-    Returns:
-        string: Brief response based on choice
-    """
-    global story_state
-    
-    # Record the choice
-    if theme not in story_state["choices_made"]:
-        story_state["choices_made"][theme] = []
-    
-    story_state["choices_made"][theme].append(choice)
-    
-    # Update emotional state based on choices pattern
-    yes_count = sum(1 for c in story_state["choices_made"].get(theme, []) if c == 'yes')
-    no_count = sum(1 for c in story_state["choices_made"].get(theme, []) if c == 'no')
-    
-    if yes_count > no_count:
-        story_state["emotional_state"] = "positive"
-    elif no_count > yes_count:
-        story_state["emotional_state"] = "negative"
-    else:
-        story_state["emotional_state"] = "neutral"
-    
-    # Add recurring elements based on theme and choices
-    if theme == "falling" and choice == 'yes':
-        story_state["recurring_elements"].append("The sensation of weightlessness")
-    elif theme == "chase" and choice == 'no':
-        story_state["recurring_elements"].append("The sound of distant footsteps")
-    elif theme == "labyrinth" and choice == 'yes':
-        story_state["recurring_elements"].append("A mysterious door")
-    
-    # Limit recurring elements to prevent clutter
-    if len(story_state["recurring_elements"]) > 3:
-        story_state["recurring_elements"] = story_state["recurring_elements"][-3:]
-    
-    # Get the appropriate outcome
-    theme_data = DREAM_THEMES[theme]
-    if choice == 'yes':
-        return theme_data["outcomes"]["yes"][question_index]
-    else:
-        return theme_data["outcomes"]["no"][question_index]
+    """Compatibility wrapper for DreamManager.process_choice."""
+    return _dream_manager.process_choice(choice, theme, question_index)
 
 def get_dream_summary():
-    """
-    Generate a summary of the dream journey so far.
-    
-    Returns:
-        string: Summary of the dream journey
-    """
-    if story_state["dream_depth"] <= 0:
-        return "The dream begins..."
-    
-    # Generate summary based on visited dreams and choices
-    themes_seen = len(story_state["visited_dreams"])
-    
-    if themes_seen == 0:
-        return "Your dream journey is just beginning..."
-    
-    # Create a summary based on emotional state and depth
-    if story_state["emotional_state"] == "positive":
-        emotion_text = "Your journey has been mostly hopeful."
-    elif story_state["emotional_state"] == "negative":
-        emotion_text = "Your path has been filled with anxiety."
-    else:
-        emotion_text = "Your dream has been a balance of light and dark."
-    
-    # Add depth indicator
-    if story_state["dream_depth"] < 3:
-        depth_text = "You are still near the surface of your dream."
-    elif story_state["dream_depth"] < 6:
-        depth_text = "You are descending deeper into your subconscious."
-    else:
-        depth_text = "You have journeyed deep into the dream world."
-    
-    # Add recurring elements if any
-    recurring_text = ""
-    if story_state["recurring_elements"]:
-        recurring_text = f" {random.choice(story_state['recurring_elements'])} seems significant."
-    
-    return f"{depth_text} {emotion_text}{recurring_text}"
+    """Compatibility wrapper for DreamManager.get_dream_summary."""
+    return _dream_manager.get_dream_summary()
 
 def reset_story():
     """Reset the story state for a new game."""
-    global story_state
+    global story_state, _dream_manager
     story_state = {
         "visited_dreams": set(),
         "choices_made": {},
@@ -415,3 +583,5 @@ def reset_story():
         "recurring_elements": [],
         "emotional_state": "neutral",
     }
+    # Recreate the dream manager to reset its state
+    _dream_manager = DreamManager()

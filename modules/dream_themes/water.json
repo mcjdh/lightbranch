@@ -1,0 +1,28 @@
+{
+  "narratives": [
+    "You find yourself submerged in water, yet breathing normally.",
+    "The ocean floor stretches endlessly before you, dotted with strange structures.",
+    "Currents pull you through underwater cities built by unknown hands.",
+    "Water surrounds you, neither cold nor warm, as natural as air."
+  ],
+  "questions": [
+    "Do you swim deeper?",
+    "Do you try to communicate with the creatures around you?",
+    "Do you explore the underwater ruins?",
+    "Do you follow the current?"
+  ],
+  "outcomes": {
+    "yes": [
+      "You descend, the water growing darker but somehow clearer around you.",
+      "Your thoughts flow outward and alien minds touch your own in response.",
+      "Ancient doorways part before you, revealing chambers untouched for millennia.",
+      "The current carries you effortlessly, bringing you to unexpected places."
+    ],
+    "no": [
+      "You remain where you are, suspended in the blue twilight.",
+      "You keep your thoughts to yourself, observing the strange lifeforms from a distance.",
+      "You stay away from the structures, unsure what might still dwell within.",
+      "You resist the pull, maintaining your position against the invisible force."
+    ]
+  }
+}

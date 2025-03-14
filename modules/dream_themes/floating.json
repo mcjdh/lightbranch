@@ -1,0 +1,28 @@
+{
+  "narratives": [
+    "Objects around you begin to rise from their places, defying gravity.",
+    "You find yourself hovering inches above the ground, weightless.",
+    "The laws of gravity seem optional here, affecting some things but not others.",
+    "Your steps become lighter until each one carries you gently into the air."
+  ],
+  "questions": [
+    "Do you try to control what floats?",
+    "Do you let yourself rise higher?",
+    "Do you reach for something floating past you?",
+    "Do you try to understand the patterns of what rises and what falls?"
+  ],
+  "outcomes": {
+    "yes": [
+      "With focused thought, you find you can direct the movement of objects around you.",
+      "You surrender to weightlessness, drifting upward like a released balloon.",
+      "Your fingers close around the floating object, which seems to pulse with significance.",
+      "You perceive a hidden order in the chaos, a musical rhythm to the rising and falling."
+    ],
+    "no": [
+      "The objects continue their chaotic dance around you, following their own mysterious rules.",
+      "You keep yourself anchored, watching as others and objects drift past.",
+      "The objects orbit around you just out of reach, forming constellations of memory.",
+      "The apparent randomness persists, beautiful in its unpredictability."
+    ]
+  }
+}

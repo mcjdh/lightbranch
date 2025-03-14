@@ -1,0 +1,28 @@
+{
+  "narratives": [
+    "You find yourself in a forest that breathes with ancient life.",
+    "Plants grow and bloom around you at impossible speed.",
+    "The landscape shifts between seasons as you walk through it.",
+    "Trees whisper secrets in a language you almost understand."
+  ],
+  "questions": [
+    "Do you touch the living plants?",
+    "Do you follow the animal tracks?",
+    "Do you taste the strange fruits?",
+    "Do you speak back to the forest?"
+  ],
+  "outcomes": {
+    "yes": [
+      "The plants respond to your touch, curling gently around your fingers.",
+      "The tracks lead you to a clearing where animals gather in unusual harmony.",
+      "The fruit tastes of memories you didn't know you had.",
+      "The forest quiets to listen, then responds with a chorus of rustling leaves."
+    ],
+    "no": [
+      "You keep your hands to yourself, watching the vegetation pulse with life.",
+      "You forge your own path, feeling eyes watching from the undergrowth.",
+      "You resist the temptation, noticing how the colors seem too vibrant to be safe.",
+      "You remain silent, letting the whispers fade into background noise."
+    ]
+  }
+}
